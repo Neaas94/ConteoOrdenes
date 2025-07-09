@@ -1,0 +1,97 @@
+function contarOrdenes() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const hojaOrigenNombre = 'Form Responses 1';
+  const hojaDestinoNombre = 'Conteo de Órdenes';
+
+  const hojaOrigen = ss.getSheetByName(hojaOrigenNombre);
+  if (!hojaOrigen) return;
+
+  let hojaDestino = ss.getSheetByName(hojaDestinoNombre);
+  if (!hojaDestino) {
+    hojaDestino = ss.insertSheet(hojaDestinoNombre);
+  } else {
+    hojaDestino.clear();
+  }
+
+  const ultimaFila = hojaOrigen.getLastRow();
+  if (ultimaFila < 2) {
+    hojaDestino.getRange(1, 1).setValue('No hay órdenes registradas');
+    return;
+  }
+
+  // 🧠 Obtener encabezados reales
+  const encabezados = hojaOrigen.getRange(1, 1, 1, hojaOrigen.getLastColumn()).getValues()[0];
+  Logger.log('Encabezados encontrados: ' + encabezados.join(', ')); // Depuración
+
+  const columnas = {
+    totalOrden: 'Numero de Orden',
+    guia: 'GUIA CREACIÓN SKYONE',
+    entregado: 'FECHA DE ENTREGADO'
+  };
+
+  const idxTotalOrden = encabezados.indexOf(columnas.totalOrden);
+  const idxGuia = encabezados.indexOf(columnas.guia);
+  const idxEntregado = encabezados.indexOf(columnas.entregado);
+
+  if (idxTotalOrden === -1 || idxGuia === -1 || idxEntregado === -1) {
+    hojaDestino.getRange(1, 1).setValue('⚠️ Error: encabezados no encontrados');
+    return;
+  }
+
+  const datos = hojaOrigen.getRange(2, 1, ultimaFila - 1, hojaOrigen.getLastColumn()).getValues();
+
+  const totalOrdenes = datos.filter(fila => fila[idxTotalOrden] !== '').length;
+  const ordenesConGuia = datos.filter(fila => fila[idxGuia] !== '').length;
+  const ordenesEntregadas = datos.filter(fila => fila[idxEntregado] !== '').length;
+  const ordenesSinGuia = totalOrdenes - ordenesConGuia;
+
+  const resultados = [
+    ['Total de Órdenes', totalOrdenes],
+    ['Órdenes con guía registrada:', ordenesConGuia],
+    ['Órdenes sin guía registrada:', ordenesSinGuia],
+    ['Órdenes entregadas:', ordenesEntregadas]
+  ];
+
+  hojaDestino.getRange(1, 1, resultados.length, 2).setValues(resultados);
+
+  // 🎨 Estilos
+  hojaDestino.getRange('A1:B1').setFontWeight('bold').setBackground('#c6e0b4');
+  hojaDestino.getRange('A2:B4').setFontWeight('bold').setBackground('#ddebf7');
+  hojaDestino.getRange('A5:B5').setFontWeight('bold').setBackground('#ffffff');
+  hojaDestino.getRange('A1:B5').setWrap(true);
+  hojaDestino.autoResizeRows(1, 5);
+  hojaDestino.autoResizeColumns(1, 2);
+  hojaDestino.getRange('A1:B5').setBorder(true, true, true, true, true, true);
+  hojaDestino.getRange('A1:B5').setHorizontalAlignment('center');
+
+  // 🕒 Fecha y hora
+  const fechaActual = new Date();
+  const zonaHoraria = Session.getScriptTimeZone();
+  const fechaFormateada = Utilities.formatDate(fechaActual, zonaHoraria, 'dd/MM/yyyy hh:mm a');
+
+  hojaDestino.getRange('A7').setValue('Última actualización: ' + fechaFormateada).setFontStyle('italic');
+  hojaOrigen.getRange('Z1').setValue('Última actualización: ' + fechaFormateada).setFontStyle('italic');
+}
+
+// 🔁 Ejecutar al enviar formulario
+function onFormSubmit(e) {
+  contarOrdenes();
+}
+
+// 🔁 Ejecutar al editar una celda de interés
+function onEdit(e) {
+  try {
+    const hoja = e.range.getSheet();
+    if (hoja.getName() !== 'Form Responses 1') return;
+
+    const encabezados = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    const columnasClave = ['Numero de Orden', 'GUIA CREACIÓN SKYONE', 'FECHA DE ENTREGADO'];
+    const nombreColumnaEditada = encabezados[e.range.getColumn() - 1];
+
+    if (columnasClave.includes(nombreColumnaEditada)) {
+      contarOrdenes();
+    }
+  } catch (error) {
+    Logger.log('Error en onEdit: ' + error.toString());
+  }
+}
